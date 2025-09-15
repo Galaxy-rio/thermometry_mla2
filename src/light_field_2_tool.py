@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Optional, Union
 from scipy.ndimage import gaussian_filter, maximum_filter
 
-
 class ImageIO:
     """图像输入输出工具类"""
 
@@ -380,7 +379,7 @@ class DotArrayVisualizer:
     def visualize_detection_results(self, image: np.ndarray, detection_result: dict,
                                     save_path: Optional[str] = None) -> np.ndarray:
         """
-        可视化点检测结果
+        可视化点检测结果（原有的OpenCV方法，保持向后兼容）
 
         Args:
             image: 原始图像
@@ -426,43 +425,6 @@ class DotArrayVisualizer:
             print(f"可视化结果已保存到: {save_path}")
 
         return result_img
-
-
-# 便捷函数
-def detect_dot_array(image_path: Union[str, Path],
-                     expected_spacing: float = 16.0,
-                     output_dir: Optional[str] = None) -> dict:
-    """
-    便捷的点检测函数
-
-    Args:
-        image_path: 图像文件路径
-        expected_spacing: 期望的网格间距（用于设置检测参数）
-        output_dir: 输出目录
-
-    Returns:
-        检测结果字典
-    """
-    # 读取图像
-    io_tool = ImageIO()
-    image = io_tool.read_image(image_path)
-
-    if image is None:
-        raise ValueError(f"无法读取图像: {image_path}")
-
-    # 创建检测器
-    detector = DotArrayDetector(expected_spacing)
-
-    # 执行检测
-    result = detector.detect_dot_array(image)
-
-    # 可视化结果
-    if output_dir:
-        visualizer = DotArrayVisualizer()
-        output_path = Path(output_dir) / f"detection_result_{Path(image_path).stem}.png"
-        visualizer.visualize_detection_results(image, result, str(output_path))
-
-    return result
 
 
 if __name__ == "__main__":

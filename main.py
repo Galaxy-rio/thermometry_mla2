@@ -10,61 +10,7 @@ from pathlib import Path
 # 添加src目录到Python路径
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
-from src.light_field_2_tool import ImageIO, DotArrayDetector, DotArrayVisualizer, detect_dot_array
-
-
-def test_dot_array_detection():
-    """测试点阵检测功能"""
-    print("=== 点阵检测功能测试 ===")
-
-    # 设置路径
-    data_dir = Path("data")
-    output_dir = Path("output")
-
-    # 确保目录存在
-    output_dir.mkdir(exist_ok=True)
-
-    # 查找测试图片
-    image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif']
-    found_images = []
-
-    for ext in image_extensions:
-        found_images.extend(list(data_dir.glob(f"*{ext}")))
-        found_images.extend(list(data_dir.glob(f"*{ext.upper()}")))
-
-    if not found_images:
-        print("未找到测试图片，请将图片放入data目录")
-        return
-
-    # 使用第一张图片进行测试
-    test_image_path = found_images[0]
-    print(f"使用图片: {test_image_path}")
-
-    try:
-        # 方法1: 使用便捷函数
-        print("\n--- 使用便捷函数检测 ---")
-        result = detect_dot_array(
-            image_path=test_image_path,
-            expected_spacing=16.0,  # 你可以根据实际情况调整
-            output_dir=str(output_dir)
-        )
-
-        # 显示结果
-        print(f"\n检测结果:")
-        print(f"  检测到的点数: {result['num_detected']}")
-
-        if result['num_detected'] > 0:
-            print(f"  前5个检测点坐标:")
-            for i, (x, y) in enumerate(result['refined_centers'][:5]):
-                print(f"    点{i+1}: ({x:.2f}, {y:.2f})")
-
-    except Exception as e:
-        print(f"检测失败: {e}")
-        print("可能的原因:")
-        print("1. 图片中没有足够的点阵结构")
-        print("2. 期望间距设置不正确")
-        print("3. 图片质量或对比度问题")
-
+from src.light_field_2_tool import ImageIO, DotArrayDetector, DotArrayVisualizer
 
 def test_custom_detection():
     """自定义参数的点阵检测测试"""
@@ -111,19 +57,6 @@ def test_custom_detection():
             save_path=str(output_path)
         )
 
-        # 生成详细的SVG报告
-        if result['num_detected'] > 0:
-            report_path = output_dir / f"detailed_report_{test_image.stem}.svg"
-            visualizer.create_detailed_svg_report(
-                image=image,
-                detection_result=result,
-                report_path=str(report_path),
-                zoom_factor=3.0  # 3倍放大
-            )
-
-        print("自定义检测完成!")
-        print(f"生成文件:")
-
     except Exception as e:
         print(f"自定义检测失败: {e}")
 
@@ -157,7 +90,6 @@ def main():
         return
 
     # 运行测试
-    # test_dot_array_detection()
     test_custom_detection()
 
     print("\n=== 程序结束 ===")
