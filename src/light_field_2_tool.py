@@ -223,7 +223,7 @@ class DotArrayDetector:
         # 应用阈值
         local_maxima = local_maxima & (smoothed > threshold_abs)
 
-        # 获取��部最大值的坐标
+        # 获取局部最大值的坐标
         y_coords, x_coords = np.where(local_maxima)
         peaks = list(zip(x_coords, y_coords))
 
@@ -325,11 +325,11 @@ class DotArrayDetector:
 
         return refined_centers
 
-    def detect_dot_array(self, image: np.ndarray,
+    def detect_bright_spots(self, image: np.ndarray,
                          min_distance: Optional[int] = None,
                          threshold_abs: Optional[float] = None) -> dict:
         """
-        完整的点检测流程
+        完整的亮点检测流程
 
         Args:
             image: 输入图像
@@ -342,13 +342,13 @@ class DotArrayDetector:
         if min_distance is None:
             min_distance = max(4, int(self.expected_spacing / 3))
 
-        print("开始点检测...")
+        print("开始亮点检测...")
 
         # 步骤1: 检测局部最亮点
         peaks = self.detect_local_maxima(image, min_distance, threshold_abs)
 
         if len(peaks) < 1:
-            print("警告：未检测到任何点")
+            print("警告：未检测到任何亮点")
             return {
                 'detected_peaks': [],
                 'refined_centers': [],
@@ -364,7 +364,7 @@ class DotArrayDetector:
             'num_detected': len(refined_centers)
         }
 
-        print(f"点检测完成! 检测到 {len(refined_centers)} 个点")
+        print(f"亮点检测完成! 检测到 {len(refined_centers)} 个亮点")
 
         return result
 
