@@ -345,7 +345,7 @@ class DotArrayDetector:
         print("开始亮点检测...")
 
         # 步骤1: 检测局部最亮点
-        peaks = self.detect_local_maxima(image, min_distance, threshold_abs)
+        peaks = self.detect_local_maxima(image, min_distance, threshold_abs, edge_mask_width=100)
 
         if len(peaks) < 1:
             print("警告：未检测到任何亮点")
