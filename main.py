@@ -83,10 +83,10 @@ def select_experiment_and_process(experiments):
 
         # 第二步：选择操作类型
         print("\n=== 第二步：选择操作类型 ===")
-        print("0. 全部操作（光圈中心检测 + 光谱中心检测）")
-        print("1. 仅寻找最小光圈中心")
+        print("0. 全部操作")
+        print("1. 寻找最小光圈中心")
         print("2. 寻找最小光圈中心 + 各个波段图像的中心")
-        print("3. 未来功能（暂未实现）")
+        print("3. 生成第一类多视角图像")
         print("4. 未来功能（暂未实现）")
 
         operation_choice = input("\n请选择操作类型 (0-4): ").strip()
@@ -173,7 +173,60 @@ def select_experiment_and_process(experiments):
 
                 print(f"实验 {exp_name} 处理完成，可视化结果已保存到 output\\{exp_name}\\")
 
-        elif operation_idx >= 3:
+        elif operation_idx == 3:
+            # 生成第一类多视角图像
+            print("\n开始执行：生成第一类多视角图像")
+
+            # 首先需要检测光圈中心
+            for exp_name, exp_data in selected_experiments.items():
+                print(f"\n处理实验：{exp_name}")
+
+                # 检测光圈中心点
+                aperture_centers = []
+                if "aperture_min" in exp_data:
+                    aperture_centers = processor.process_aperture_images(exp_data["aperture_min"], output_dir, exp_name)
+                    print(f"  - 光圈中心检测完成，共检测到 {len(aperture_centers)} 个中心点")
+                elif "aperture" in exp_data:
+                    aperture_centers = processor.process_aperture_images(exp_data["aperture"], output_dir, exp_name)
+                    print(f"  - 光圈中心检测完成，共检测到 {len(aperture_centers)} 个中心点")
+                else:
+                    print(f"  - 实验 {exp_name} 中未找到光圈图像，无法生成多视角图像")
+                    continue
+
+                if not aperture_centers:
+                    print(f"  - 未检测到光圈中心，跳过多视角图像生成")
+                    continue
+
+                # 检查是否有光场原图
+                if "lf_raw" not in exp_data:
+                    print(f"  - 实验 {exp_name} 中未找到光场原图，无法生成多视角图像")
+                    continue
+
+                # 选择光场原图
+                lf_raw_files = exp_data["lf_raw"]
+                lf_raw_image = None
+
+                # 寻找lf_raw0.bmp
+                for img_file in lf_raw_files:
+                    if img_file.stem == "lf_raw0":
+                        lf_raw_image = img_file
+                        break
+
+                # 如果没找到lf_raw0，使用第一个文件
+                if lf_raw_image is None and lf_raw_files:
+                    lf_raw_image = lf_raw_files[0]
+                    print(f"    未找到lf_raw0.bmp，使用 {lf_raw_image.name}")
+
+                if lf_raw_image:
+                    # 生成多视角图像
+                    processor.generate_multi_view_images(
+                        lf_raw_image, aperture_centers, output_dir, exp_name
+                    )
+                    print(f"  - 多视角图像生成完成")
+
+                print(f"实验 {exp_name} 多视角图像处理完成，结果已保存到 output\\{exp_name}\\multi_view\\")
+
+        elif operation_idx >= 4:
             # 未来功能
             print(f"\n操作类型 {operation_idx} 为未来功能，暂未实现")
             print("请选择其他操作类型")

@@ -577,7 +577,8 @@ class ImageProcessor:
         for img_file in image_files:
             try:
                 # 提取文件名中的数字
-                number = int(''.join(filter(str.isdigit, img_file.stem)))
+                digits = [char for char in img_file.stem if char.isdigit()]
+                number = int(''.join(digits))
                 file_numbers.append(number)
                 file_mapping[number] = img_file
             except ValueError:
@@ -767,3 +768,367 @@ class ImageProcessor:
             if lf_raw_image:
                 self.create_combined_visualization(aperture_centers, spectrum_data,
                                                 lf_raw_image, output_dir, exp_name)
+
+    def generate_multi_view_images(self, lf_raw_image_path: Path, aperture_centers: List[Tuple[float, float]],
+                                 output_dir: Path, exp_name: str, pmr: int = 40):
+        """
+        生成第一类多视角图像
+
+        Args:
+            lf_raw_image_path: 光场原图路径
+            aperture_centers: 光圈中心点列表
+            output_dir: 输出目录
+            exp_name: 实验名称
+            pmr: 子图像直径（像素），默认40
+        """
+        print(f"\n=== 生成多视角图像 ===")
+        print(f"子图像直径(PMR): {pmr} 像素")
+
+        try:
+            # 读取光场原图
+            lf_raw_image = self.io_tool.read_image(lf_raw_image_path)
+            if lf_raw_image is None:
+                print(f"无法读取光场原图: {lf_raw_image_path}")
+                return
+
+            print(f"光场原图尺寸: {lf_raw_image.shape}")
+            print(f"检测到的子图像中心数量: {len(aperture_centers)}")
+
+            # 创建输出目录
+            multi_view_dir = output_dir / exp_name / "multi_view"
+            multi_view_dir.mkdir(parents=True, exist_ok=True)
+
+            # 定义视角参数
+            view_configs = [
+                {"name": "center", "description": "Center View", "scale": 0.2, "offset_x": 0, "offset_y": 0},
+                {"name": "top_left", "description": "Top Left View", "scale": 0.2, "offset_x": -0.25, "offset_y": -0.25},
+                {"name": "top_right", "description": "Top Right View", "scale": 0.2, "offset_x": 0.25, "offset_y": -0.25},
+                {"name": "bottom_left", "description": "Bottom Left View", "scale": 0.2, "offset_x": -0.25, "offset_y": 0.25},
+                {"name": "bottom_right", "description": "Bottom Right View", "scale": 0.2, "offset_x": 0.25, "offset_y": 0.25},
+            ]
+
+            # 为每个视角生成图像
+            for config in view_configs:
+                print(f"\n生成{config['description']}...")
+
+                view_image = self._extract_view_image(
+                    lf_raw_image, aperture_centers, pmr,
+                    config['scale'], config['offset_x'], config['offset_y']
+                )
+
+                if view_image is not None:
+                    # 保存视角图像
+                    output_path = multi_view_dir / f"view_{config['name']}.png"
+                    success = self.io_tool.save_image(view_image, output_path)
+
+                    if success:
+                        print(f"  - {config['description']}已保存: {output_path}")
+                    else:
+                        print(f"  - {config['description']}保存失败")
+                else:
+                    print(f"  - {config['description']}生成失败")
+
+            # 生成一个综合展示图像，将所有视角放在一张图上
+            self._create_multi_view_summary(multi_view_dir, view_configs)
+
+            print(f"\n多视角图像生成完成！")
+            print(f"输出目录: {multi_view_dir}")
+
+        except Exception as e:
+            print(f"生成多视角图像失败: {e}")
+
+    def _extract_view_image(self, lf_raw_image: np.ndarray, aperture_centers: List[Tuple[float, float]],
+                           pmr: int, scale: float, offset_x: float, offset_y: float) -> Optional[np.ndarray]:
+        """
+        从光场原图中提取特定视角的图像
+
+        Args:
+            lf_raw_image: 光场原图
+            aperture_centers: 子图像中心点列表
+            pmr: 子图像直径（参考值）
+            scale: 提取区域的缩放倍率
+            offset_x: 相对于中心的X偏移（-0.5到0.5之间）
+            offset_y: 相对于中心的Y偏移（-0.5到0.5之间）
+
+        Returns:
+            视角图像，如果失败返回None
+        """
+        try:
+            h, w = lf_raw_image.shape[:2]
+
+            # 计算提取区域的实际尺寸
+            patch_size = int(pmr * scale)
+            if patch_size < 1:
+                patch_size = 1
+
+            print(f"  提取区域尺寸: {patch_size}x{patch_size} 像素")
+            print(f"  偏移量: ({offset_x:.2f}, {offset_y:.2f})")
+
+            # 估算输出图像尺寸（基于子图像的分布）
+            if len(aperture_centers) < 2:
+                print("  警告: 子图像数量太少，无法估算输出尺寸")
+                return None
+
+            # 计算子图像的网格排列
+            centers_array = np.array(aperture_centers)
+            min_x, max_x = np.min(centers_array[:, 0]), np.max(centers_array[:, 0])
+            min_y, max_y = np.min(centers_array[:, 1]), np.max(centers_array[:, 1])
+
+            print(f"  中心点范围: X({min_x:.1f}, {max_x:.1f}), Y({min_y:.1f}, {max_y:.1f})")
+
+            # 动态计算实际的子图像间距，而不是使用固定的PMR值
+            actual_spacing_x, actual_spacing_y = self._calculate_actual_spacing(aperture_centers)
+
+            print(f"  实际子图像间距: X={actual_spacing_x:.2f}, Y={actual_spacing_y:.2f} 像素")
+            print(f"  参考PMR值: {pmr} 像素")
+
+            # 计算所有中心点的网格坐标（使用实际间距）
+            grid_coords = []
+            for center_x, center_y in aperture_centers:
+                grid_x_float = (center_x - min_x) / actual_spacing_x
+                grid_y_float = (center_y - min_y) / actual_spacing_y
+                grid_coords.append((grid_x_float, grid_y_float))
+
+            # 计算网格尺寸（基于浮点坐标的范围）
+            grid_x_coords = [coord[0] for coord in grid_coords]
+            grid_y_coords = [coord[1] for coord in grid_coords]
+
+            grid_width = int(np.ceil(max(grid_x_coords))) + 1
+            grid_height = int(np.ceil(max(grid_y_coords))) + 1
+
+            # 添加合理性检查
+            max_grid_size = 200
+            if grid_width > max_grid_size or grid_height > max_grid_size:
+                print(f"  警告: 估算的网格尺寸过大 ({grid_width}x{grid_height})，限制为最大尺寸")
+                grid_width = min(grid_width, max_grid_size)
+                grid_height = min(grid_height, max_grid_size)
+
+            output_width = grid_width * patch_size
+            output_height = grid_height * patch_size
+
+            print(f"  网格尺寸: {grid_width}x{grid_height}")
+            print(f"  输出图像尺寸: {output_width}x{output_height}")
+
+            # 再次检查输出图像尺寸是否合理
+            max_output_size = 4000
+            if output_width > max_output_size or output_height > max_output_size:
+                print(f"  错误: 输出图像尺寸过大，无法处理")
+                return None
+
+            # 创建输出图像，用白色背景
+            if len(lf_raw_image.shape) == 3:
+                view_image = np.full((output_height, output_width, lf_raw_image.shape[2]), 255, dtype=lf_raw_image.dtype)
+            else:
+                view_image = np.full((output_height, output_width), 255, dtype=lf_raw_image.dtype)
+
+            valid_patches = 0
+            overlap_count = 0
+
+            # 为每个子图像中心提取对应的patch
+            for i, (center_x, center_y) in enumerate(aperture_centers):
+                # 计算提取位置（考虑偏移，使用实际间距）
+                extract_x = center_x + offset_x * actual_spacing_x / 2
+                extract_y = center_y + offset_y * actual_spacing_y / 2
+
+                # 计算提取区域的边界
+                left = int(extract_x - patch_size // 2)
+                right = left + patch_size
+                top = int(extract_y - patch_size // 2)
+                bottom = top + patch_size
+
+                # 检查边界
+                if left < 0 or right >= w or top < 0 or bottom >= h:
+                    continue
+
+                # 提取patch
+                if len(lf_raw_image.shape) == 3:
+                    patch = lf_raw_image[top:bottom, left:right, :]
+                else:
+                    patch = lf_raw_image[top:bottom, left:right]
+
+                # 确保patch尺寸正确
+                if patch.shape[0] != patch_size or patch.shape[1] != patch_size:
+                    continue
+
+                # 旋转180度
+                patch = cv2.rotate(patch, cv2.ROTATE_180)
+
+                # 使用浮点坐标计算精确的输出位置
+                grid_x_float, grid_y_float = grid_coords[i]
+
+                # 计算在输出图像中的精确像素位置（使用浮点坐标）
+                output_left_float = grid_x_float * patch_size
+                output_top_float = grid_y_float * patch_size
+
+                # 转换为整数坐标
+                output_left = int(round(output_left_float))
+                output_top = int(round(output_top_float))
+                output_right = output_left + patch_size
+                output_bottom = output_top + patch_size
+
+                # 确保不超出输出图像边界
+                if output_right <= output_width and output_bottom <= output_height and output_left >= 0 and output_top >= 0:
+                    # 检查是否会覆盖非白色区域（检测重叠）
+                    if len(lf_raw_image.shape) == 3:
+                        existing_region = view_image[output_top:output_bottom, output_left:output_right, :]
+                        if not np.all(existing_region == 255):
+                            overlap_count += 1
+                        view_image[output_top:output_bottom, output_left:output_right, :] = patch
+                    else:
+                        existing_region = view_image[output_top:output_bottom, output_left:output_right]
+                        if not np.all(existing_region == 255):
+                            overlap_count += 1
+                        view_image[output_top:output_bottom, output_left:output_right] = patch
+
+                    valid_patches += 1
+
+            print(f"  成功提取了 {valid_patches}/{len(aperture_centers)} 个子图像patch")
+            if overlap_count > 0:
+                print(f"  检测到 {overlap_count} 个patch重叠")
+
+            if valid_patches == 0:
+                print("  警告: 没有成功提取任何patch")
+                return None
+
+            return view_image
+
+        except Exception as e:
+            print(f"  提取视角图像失败: {e}")
+            return None
+
+    def _calculate_actual_spacing(self, aperture_centers: List[Tuple[float, float]]) -> Tuple[float, float]:
+        """
+        计算实际的子图像间距
+
+        Args:
+            aperture_centers: 子图像中心点列表
+
+        Returns:
+            (spacing_x, spacing_y): X和Y方向的实际间距
+        """
+        if len(aperture_centers) < 4:
+            # 如果中心点太少，返回默认值
+            return 40.0, 40.0
+
+        centers_array = np.array(aperture_centers)
+
+        # 计算X方向的间距
+        x_distances = []
+        y_distances = []
+
+        # 对每个中心点，找到最近的邻居
+        for i, (x1, y1) in enumerate(aperture_centers):
+            min_x_dist = float('inf')
+            min_y_dist = float('inf')
+
+            for j, (x2, y2) in enumerate(aperture_centers):
+                if i == j:
+                    continue
+
+                dx = abs(x2 - x1)
+                dy = abs(y2 - y1)
+
+                # X方向上的最近邻居（Y坐标相近）
+                if dy < 10:  # 认为在同一行
+                    if dx > 5 and dx < min_x_dist:  # 避免重复点
+                        min_x_dist = dx
+
+                # Y方向上的最近邻居（X坐标相近）
+                if dx < 10:  # 认为在同一列
+                    if dy > 5 and dy < min_y_dist:  # 避免重复点
+                        min_y_dist = dy
+
+            if min_x_dist != float('inf'):
+                x_distances.append(min_x_dist)
+            if min_y_dist != float('inf'):
+                y_distances.append(min_y_dist)
+
+        # 使用中位数作为实际间距，更robust
+        if x_distances:
+            spacing_x = np.median(x_distances)
+        else:
+            spacing_x = 40.0
+
+        if y_distances:
+            spacing_y = np.median(y_distances)
+        else:
+            spacing_y = 40.0
+
+        return spacing_x, spacing_y
+
+    def _create_multi_view_summary(self, multi_view_dir: Path, view_configs: List[Dict]):
+        """创建多视角综合展示图像"""
+        try:
+            print("\n生成多视角综合展示图像...")
+
+            # 读取所有视角图像
+            view_images = []
+            valid_configs = []
+
+            for config in view_configs:
+                image_path = multi_view_dir / f"view_{config['name']}.png"
+                if image_path.exists():
+                    img = self.io_tool.read_image(image_path)
+                    if img is not None:
+                        view_images.append(img)
+                        valid_configs.append(config)
+
+            if not view_images:
+                print("  没有找到有效的视角图像")
+                return
+
+            # 计算网格布局（2x3或根据图像数量调整）
+            num_views = len(view_images)
+            if num_views <= 3:
+                grid_rows, grid_cols = 1, num_views
+            elif num_views <= 6:
+                grid_rows, grid_cols = 2, 3
+            else:
+                grid_rows = int(np.ceil(np.sqrt(num_views)))
+                grid_cols = int(np.ceil(num_views / grid_rows))
+
+            # 获取单个视角图像的尺寸
+            sample_img = view_images[0]
+            view_height, view_width = sample_img.shape[:2]
+
+            # 创建综合图像
+            summary_height = grid_rows * view_height + (grid_rows - 1) * 20  # 20像素间距
+            summary_width = grid_cols * view_width + (grid_cols - 1) * 20   # 20像素间距
+
+            if len(sample_img.shape) == 3:
+                summary_image = np.zeros((summary_height, summary_width, sample_img.shape[2]), dtype=sample_img.dtype)
+            else:
+                summary_image = np.zeros((summary_height, summary_width), dtype=sample_img.dtype)
+
+            # 将每个视角图像放置到综合图像中
+            for i, (img, config) in enumerate(zip(view_images, valid_configs)):
+                row = i // grid_cols
+                col = i % grid_cols
+
+                start_y = row * (view_height + 20)
+                start_x = col * (view_width + 20)
+                end_y = start_y + view_height
+                end_x = start_x + view_width
+
+                # 确保不超出边界
+                if end_y <= summary_height and end_x <= summary_width:
+                    if len(summary_image.shape) == 3:
+                        summary_image[start_y:end_y, start_x:end_x, :] = img
+                    else:
+                        summary_image[start_y:end_y, start_x:end_x] = img
+
+                    # 添加标题
+                    cv2.putText(summary_image, config['description'], (start_x + 5, start_y + 20),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+
+            # 保存综合展示图像
+            summary_path = multi_view_dir / "multi_view_summary.png"
+            success = self.io_tool.save_image(summary_image, summary_path)
+
+            if success:
+                print(f"  多视角综合展示图像已保存: {summary_path}")
+            else:
+                print(f"  多视角综合展示图像保存失败")
+
+        except Exception as e:
+            print(f"  创建多视角综合展示图像失败: {e}")
