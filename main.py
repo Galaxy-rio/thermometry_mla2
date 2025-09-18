@@ -48,27 +48,49 @@ def scan_experiment_data(data_dir):
     return experiments
 
 def select_experiment_and_process(experiments):
-    """选择实验并处理"""
+    """选择实验并处理 - 两步选择流程"""
     if not experiments:
         print("未找到任何实验数据")
         return
 
-    print("\n=== 可用的实验 ===")
+    # 第一步：选择实验
+    print("\n=== 第一步：选择实验 ===")
     exp_list = list(experiments.keys())
+    print("0. 全部实验")
     for i, exp_name in enumerate(exp_list, 1):
         print(f"{i}. {exp_name}")
         for type_name, files in experiments[exp_name].items():
             print(f"   - {type_name}: {len(files)} 个文件")
 
-    # 询问用户选择
-    print("\n选择处理方式:")
-    print("1. 处理所有实验（光圈图像 + 光谱校准图像）")
-    print("2. 选择特定实验（光圈图像 + 光谱校准图像）")
-    print("3. 仅处理光圈图像（aperture_min）")
-    print("4. 仅处理光谱校准图像（spectrum_cali）")
-
     try:
-        choice = input("请输入选择 (1-4): ").strip()
+        exp_choice = input(f"\n请选择实验 (0-{len(exp_list)}): ").strip()
+        exp_idx = int(exp_choice)
+
+        # 确定要处理的实验列表
+        selected_experiments = {}
+        if exp_idx == 0:
+            # 选择全部实验
+            selected_experiments = experiments
+            print("\n已选择：全部实验")
+        elif 1 <= exp_idx <= len(exp_list):
+            # 选择特定实验
+            exp_name = exp_list[exp_idx - 1]
+            selected_experiments[exp_name] = experiments[exp_name]
+            print(f"\n已选择实验：{exp_name}")
+        else:
+            print("无效的实验编号")
+            return
+
+        # 第二步：选择操作类型
+        print("\n=== 第二步：选择操作类型 ===")
+        print("0. 全部操作（光圈中心检测 + 光谱中心检测）")
+        print("1. 仅寻找最小光圈中心")
+        print("2. 寻找最小光圈中心 + 各个波段图像的中心")
+        print("3. 未来功能（暂未实现）")
+        print("4. 未来功能（暂未实现）")
+
+        operation_choice = input("\n请选择操作类型 (0-4): ").strip()
+        operation_idx = int(operation_choice)
 
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
@@ -76,44 +98,91 @@ def select_experiment_and_process(experiments):
         # 创建图像处理器
         processor = ImageProcessor()
 
-        if choice == "1":
-            # 处理所有实验的光圈图像和光谱校准图像
-            for exp_name, exp_data in experiments.items():
+        # 根据操作类型执行相应处理
+        if operation_idx == 0:
+            # 全部操作
+            print("\n开始执行：全部操作")
+            for exp_name, exp_data in selected_experiments.items():
+                print(f"\n处理实验：{exp_name}")
                 processor.process_experiment_data(exp_name, exp_data, output_dir)
+                print(f"实验 {exp_name} 处理完成，可视化结果已保存到 output/{exp_name}/")
 
-        elif choice == "2":
-            # 选择特定实验
-            exp_choice = input(f"请输入实验编号 (1-{len(exp_list)}): ").strip()
-            try:
-                exp_idx = int(exp_choice) - 1
-                if 0 <= exp_idx < len(exp_list):
-                    exp_name = exp_list[exp_idx]
-                    exp_data = experiments[exp_name]
-                    processor.process_experiment_data(exp_name, exp_data, output_dir)
-                else:
-                    print("无效的实验编号")
-            except ValueError:
-                print("请输入有效的数字")
-
-        elif choice == "3":
-            # 仅处理光圈图像
-            for exp_name, exp_data in experiments.items():
+        elif operation_idx == 1:
+            # 仅寻找最小光圈中心
+            print("\n开始执行：仅寻找最小光圈中心")
+            for exp_name, exp_data in selected_experiments.items():
+                print(f"\n处理实验：{exp_name}")
                 if "aperture_min" in exp_data:
                     processor.process_aperture_images(exp_data["aperture_min"], output_dir, exp_name)
+                    print(f"实验 {exp_name} 光圈中心检测完成，可视化结果已保存到 output/{exp_name}/aperture_detection/")
                 elif "aperture" in exp_data:
                     processor.process_aperture_images(exp_data["aperture"], output_dir, exp_name)
-
-        elif choice == "4":
-            # 仅处理光谱校准图像
-            for exp_name, exp_data in experiments.items():
-                if "spectrum_cali" in exp_data:
-                    processor.process_spectrum_images(exp_data["spectrum_cali"], output_dir, exp_name)
+                    print(f"实验 {exp_name} 光圈中心检测完成，可视化结果已保存到 output/{exp_name}/aperture_detection/")
                 else:
-                    print(f"实验 {exp_name} 中未找到光谱校准图像")
+                    print(f"实验 {exp_name} 中未找到光圈图像")
+
+        elif operation_idx == 2:
+            # 寻找最小光圈中心 + 各个波段图像的中心
+            print("\n开始执行：光圈中心检测 + 光谱中心检测")
+            for exp_name, exp_data in selected_experiments.items():
+                print(f"\n处理实验：{exp_name}")
+
+                aperture_centers = []
+                spectrum_data = {}
+
+                # 处理光圈图像
+                if "aperture_min" in exp_data:
+                    aperture_centers = processor.process_aperture_images(exp_data["aperture_min"], output_dir, exp_name)
+                    print(f"  - 光圈中心检测完成")
+                elif "aperture" in exp_data:
+                    aperture_centers = processor.process_aperture_images(exp_data["aperture"], output_dir, exp_name)
+                    print(f"  - 光圈中心检测完成")
+                else:
+                    print(f"  - 实验 {exp_name} 中未找到光圈图像")
+
+                # 处理光谱校准图像
+                if "spectrum_cali" in exp_data:
+                    spectrum_data = processor.process_spectrum_images(exp_data["spectrum_cali"], output_dir, exp_name)
+                    print(f"  - 光谱中心检测完成")
+                else:
+                    print(f"  - 实验 {exp_name} 中未找到光谱校准图像")
+
+                # 如果有lf_raw图像，创建综合可视化（将所有点画在光场原图上）
+                if "lf_raw" in exp_data and (aperture_centers or spectrum_data):
+                    # 默认选择lf_raw0.bmp，如果不存在则选择第一个
+                    lf_raw_files = exp_data["lf_raw"]
+                    lf_raw_image = None
+
+                    # 寻找lf_raw0.bmp
+                    for img_file in lf_raw_files:
+                        if img_file.stem == "lf_raw0":
+                            lf_raw_image = img_file
+                            break
+
+                    # 如果没找到lf_raw0，使用第一个文件
+                    if lf_raw_image is None and lf_raw_files:
+                        lf_raw_image = lf_raw_files[0]
+                        print(f"    未找到lf_raw0.bmp，使用 {lf_raw_image.name}")
+
+                    if lf_raw_image:
+                        processor.create_combined_visualization(aperture_centers, spectrum_data,
+                                                            lf_raw_image, output_dir, exp_name)
+                        print(f"  - 综合可视化完成，所有检测点已画在{lf_raw_image.name}上")
+                elif "lf_raw" not in exp_data:
+                    print(f"  - 实验 {exp_name} 中未找到光场原图，跳过综合可视化")
+
+                print(f"实验 {exp_name} 处理完成，可视化结果已保存到 output\\{exp_name}\\")
+
+        elif operation_idx >= 3:
+            # 未来功能
+            print(f"\n操作类型 {operation_idx} 为未来功能，暂未实现")
+            print("请选择其他操作类型")
 
         else:
-            print("无效选择")
+            print("无效的操作类型")
 
+    except ValueError:
+        print("请输入有效的数字")
     except KeyboardInterrupt:
         print("\n用户取消操作")
 

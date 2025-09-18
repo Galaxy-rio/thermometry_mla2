@@ -642,21 +642,21 @@ class ImageProcessor:
 
         return spectrum_data
 
-    def create_combined_visualization(self, aperture_centers: List[Tuple[float, float]],
-                                    spectrum_data: Dict, dispersion_image_path: Path,
+    def create_combined_visualization(self, aperture_centers: List[Tuple[int, int]],
+                                    spectrum_data: Dict, lf_raw_image_path: Path,
                                     output_dir: Path, exp_name: str):
-        """在dispersion图像上叠加显示所有检测到的中心点"""
+        """在光场原图上叠加显示所有检测到的中心点"""
         print(f"\n=== 创建综合可视化图像 ===")
 
         try:
-            # 读取dispersion图像
-            dispersion_image = self.io_tool.read_image(dispersion_image_path)
+            # 读取光场原图
+            lf_raw_image = self.io_tool.read_image(lf_raw_image_path)
 
-            if dispersion_image is None:
-                print(f"无法读取dispersion图像: {dispersion_image_path}")
+            if lf_raw_image is None:
+                print(f"无法读取光场原图: {lf_raw_image_path}")
                 return
 
-            print(f"使用背景图像: {dispersion_image_path}")
+            print(f"使用背景图像: {lf_raw_image_path}")
             print(f"光圈中心点数量: {len(aperture_centers)}")
 
             # 统计光谱中心点总数
@@ -664,7 +664,7 @@ class ImageProcessor:
             print(f"光谱中心点数量: {total_spectrum_spots}")
 
             # 创建结果图像副本
-            result_img = dispersion_image.copy()
+            result_img = lf_raw_image.copy()
             if len(result_img.shape) == 2:
                 result_img = cv2.cvtColor(result_img, cv2.COLOR_GRAY2BGR)
 
@@ -747,23 +747,23 @@ class ImageProcessor:
         else:
             print(f"实验 {exp_name} 中未找到光谱校准图像")
 
-        # 如果有dispersion图像，创建综合可视化
-        if "dispersion" in exp_data and (aperture_centers or spectrum_data):
-            # 默认选择dispersion0.bmp，如果不存在则选择第一个
-            dispersion_files = exp_data["dispersion"]
-            dispersion_image = None
+        # 如果有lf_raw图像，创建综合可视化
+        if "lf_raw" in exp_data and (aperture_centers or spectrum_data):
+            # 默认选择lf_raw0.bmp，如果不存在则选择第一个
+            lf_raw_files = exp_data["lf_raw"]
+            lf_raw_image = None
 
-            # 寻找dispersion0.bmp
-            for img_file in dispersion_files:
-                if img_file.stem == "dispersion0":
-                    dispersion_image = img_file
+            # 寻找lf_raw0.bmp
+            for img_file in lf_raw_files:
+                if img_file.stem == "lf_raw0":
+                    lf_raw_image = img_file
                     break
 
-            # 如果没找到dispersion0，使用第一个文件
-            if dispersion_image is None and dispersion_files:
-                dispersion_image = dispersion_files[0]
-                print(f"未找到dispersion0.bmp，使用 {dispersion_image.name}")
+            # 如果没找到lf_raw0，使用第一个文件
+            if lf_raw_image is None and lf_raw_files:
+                lf_raw_image = lf_raw_files[0]
+                print(f"未找到lf_raw0.bmp，使用 {lf_raw_image.name}")
 
-            if dispersion_image:
+            if lf_raw_image:
                 self.create_combined_visualization(aperture_centers, spectrum_data,
-                                                dispersion_image, output_dir, exp_name)
+                                                lf_raw_image, output_dir, exp_name)
