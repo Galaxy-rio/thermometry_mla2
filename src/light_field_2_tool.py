@@ -878,7 +878,7 @@ class ImageProcessor:
 
             # 动态计算实际的子图像间距，而不是使用固定的PMR值
             actual_spacing_x, actual_spacing_y = self._calculate_actual_spacing(aperture_centers)
-
+            
             print(f"  实际子图像间距: X={actual_spacing_x:.2f}, Y={actual_spacing_y:.2f} 像素")
             print(f"  参考PMR值: {pmr} 像素")
 
@@ -999,61 +999,61 @@ class ImageProcessor:
     def _calculate_actual_spacing(self, aperture_centers: List[Tuple[float, float]]) -> Tuple[float, float]:
         """
         计算实际的子图像间距
-
+        
         Args:
             aperture_centers: 子图像中心点列表
-
+            
         Returns:
             (spacing_x, spacing_y): X和Y方向的实际间距
         """
         if len(aperture_centers) < 4:
             # 如果中心点太少，返回默认值
             return 40.0, 40.0
-
+            
         centers_array = np.array(aperture_centers)
-
+        
         # 计算X方向的间距
         x_distances = []
         y_distances = []
-
+        
         # 对每个中心点，找到最近的邻居
         for i, (x1, y1) in enumerate(aperture_centers):
             min_x_dist = float('inf')
             min_y_dist = float('inf')
-
+            
             for j, (x2, y2) in enumerate(aperture_centers):
                 if i == j:
                     continue
-
+                    
                 dx = abs(x2 - x1)
                 dy = abs(y2 - y1)
-
+                
                 # X方向上的最近邻居（Y坐标相近）
                 if dy < 10:  # 认为在同一行
                     if dx > 5 and dx < min_x_dist:  # 避免重复点
                         min_x_dist = dx
-
+                        
                 # Y方向上的最近邻居（X坐标相近）
                 if dx < 10:  # 认为在同一列
                     if dy > 5 and dy < min_y_dist:  # 避免重复点
                         min_y_dist = dy
-
+            
             if min_x_dist != float('inf'):
                 x_distances.append(min_x_dist)
             if min_y_dist != float('inf'):
                 y_distances.append(min_y_dist)
-
+        
         # 使用中位数作为实际间距，更robust
         if x_distances:
             spacing_x = np.median(x_distances)
         else:
             spacing_x = 40.0
-
+            
         if y_distances:
             spacing_y = np.median(y_distances)
         else:
             spacing_y = 40.0
-
+            
         return spacing_x, spacing_y
 
     def _create_multi_view_summary(self, multi_view_dir: Path, view_configs: List[Dict]):
