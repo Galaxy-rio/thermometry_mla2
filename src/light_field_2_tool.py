@@ -175,7 +175,7 @@ class DotArrayDetector:
 
     def detect_local_maxima(self, image: np.ndarray, min_distance: int = 8,
                             threshold_abs: Optional[float] = None,
-                            edge_mask_width: int = 300) -> list:
+                            edge_mask_width: int = 100) -> list:
         """
         检测局部最亮点
 
@@ -435,6 +435,25 @@ class ImageProcessor:
         self.io_tool = ImageIO()
         self.detector = None
         self.visualizer = DotArrayVisualizer()
+
+        # 可配置的参数，基于PMR的比例因子
+        self.config = {
+            'view_spacing_ratio': 0.5,      # 多视角综合图像间距 = PMR * 这个比例
+            'min_distance_ratio': 0.375,    # 局部最大值最小距离 = PMR * 这个比例 (15/40=0.375)
+            'max_grid_size_ratio': 5,       # 最大网格尺寸 = PMR * 这个比例 (200/40=5)
+            'max_output_size_ratio': 100,   # 最大输出尺寸 = PMR * 这个比例 (4000/40=100)
+            'neighbor_threshold_ratio': 0.25, # 邻居判断阈值 = PMR * 这个比例 (10/40=0.25)
+            'min_distance_threshold_ratio': 0.125, # 最小距离阈值 = PMR * 这个比例 (5/40=0.125)
+        }
+
+        # 固定参数（与PMR无关）
+        self.fixed_config = {
+            'edge_mask_width': 100,          # 边缘屏蔽宽度（像素），固定值
+        }
+
+    def get_config_value(self, key: str, pmr: float) -> float:
+        """根据PMR值获取配置参数的实际值"""
+        return self.config[key] * pmr
 
     @staticmethod
     def get_rainbow_color(value: float, min_val: float, max_val: float) -> Tuple[int, int, int]:
@@ -829,7 +848,7 @@ class ImageProcessor:
                     print(f"  - {config['description']}生成失败")
 
             # 生成一个综合展示图像，将所有视角放在一张图上
-            self._create_multi_view_summary(multi_view_dir, view_configs)
+            self._create_multi_view_summary(multi_view_dir, view_configs, pmr)
 
             print(f"\n多视角图像生成完成！")
             print(f"输出目录: {multi_view_dir}")
@@ -877,8 +896,8 @@ class ImageProcessor:
             print(f"  中心点范围: X({min_x:.1f}, {max_x:.1f}), Y({min_y:.1f}, {max_y:.1f})")
 
             # 动态计算实际的子图像间距，而不是使用固定的PMR值
-            actual_spacing_x, actual_spacing_y = self._calculate_actual_spacing(aperture_centers)
-            
+            actual_spacing_x, actual_spacing_y = self._calculate_actual_spacing(aperture_centers, pmr)
+
             print(f"  实际子图像间距: X={actual_spacing_x:.2f}, Y={actual_spacing_y:.2f} 像素")
             print(f"  参考PMR值: {pmr} 像素")
 
@@ -896,10 +915,10 @@ class ImageProcessor:
             grid_width = int(np.ceil(max(grid_x_coords))) + 1
             grid_height = int(np.ceil(max(grid_y_coords))) + 1
 
-            # 添加合理性检查
-            max_grid_size = 200
+            # 使用配置化的最大网格尺寸
+            max_grid_size = int(self.get_config_value('max_grid_size_ratio', pmr))
             if grid_width > max_grid_size or grid_height > max_grid_size:
-                print(f"  警告: 估算的网格尺寸过大 ({grid_width}x{grid_height})，限制为最大尺寸")
+                print(f"  警告: 估算的网格尺寸过大 ({grid_width}x{grid_height})，限制为最大尺寸 {max_grid_size}")
                 grid_width = min(grid_width, max_grid_size)
                 grid_height = min(grid_height, max_grid_size)
 
@@ -909,10 +928,10 @@ class ImageProcessor:
             print(f"  网格尺寸: {grid_width}x{grid_height}")
             print(f"  输出图像尺寸: {output_width}x{output_height}")
 
-            # 再次检查输出图像尺寸是否合理
-            max_output_size = 4000
+            # 使用配置化的最大输出尺寸
+            max_output_size = int(self.get_config_value('max_output_size_ratio', pmr))
             if output_width > max_output_size or output_height > max_output_size:
-                print(f"  错误: 输出图像尺寸过大，无法处理")
+                print(f"  错误: 输出图像尺寸过大 ({output_width}x{output_height})，超过最大尺寸 {max_output_size}")
                 return None
 
             # 创建输出图像，用白色背景
@@ -996,26 +1015,31 @@ class ImageProcessor:
             print(f"  提取视角图像失败: {e}")
             return None
 
-    def _calculate_actual_spacing(self, aperture_centers: List[Tuple[float, float]]) -> Tuple[float, float]:
+    def _calculate_actual_spacing(self, aperture_centers: List[Tuple[float, float]], pmr: float) -> Tuple[float, float]:
         """
         计算实际的子图像间距
         
         Args:
             aperture_centers: 子图像中心点列表
-            
+            pmr: 子图像直径（参考值）
+
         Returns:
             (spacing_x, spacing_y): X和Y方向的实际间距
         """
         if len(aperture_centers) < 4:
-            # 如果中心点太少，返回默认值
-            return 40.0, 40.0
-            
+            # 如果中心点太少，返回PMR值作为默认值
+            return pmr, pmr
+
         centers_array = np.array(aperture_centers)
         
         # 计算X方向的间距
         x_distances = []
         y_distances = []
         
+        # 使用配置化的参数
+        neighbor_threshold = self.get_config_value('neighbor_threshold_ratio', pmr)
+        min_distance_threshold = self.get_config_value('min_distance_threshold_ratio', pmr)
+
         # 对每个中心点，找到最近的邻居
         for i, (x1, y1) in enumerate(aperture_centers):
             min_x_dist = float('inf')
@@ -1029,13 +1053,13 @@ class ImageProcessor:
                 dy = abs(y2 - y1)
                 
                 # X方向上的最近邻居（Y坐标相近）
-                if dy < 10:  # 认为在同一行
-                    if dx > 5 and dx < min_x_dist:  # 避免重复点
+                if dy < neighbor_threshold:  # 认为在同一行
+                    if min_distance_threshold < dx < min_x_dist:  # 避免重复点
                         min_x_dist = dx
                         
                 # Y方向上的最近邻居（X坐标相近）
-                if dx < 10:  # 认为在同一列
-                    if dy > 5 and dy < min_y_dist:  # 避免重复点
+                if dx < neighbor_threshold:  # 认为在同一列
+                    if min_distance_threshold < dy < min_y_dist:  # 避免重复点
                         min_y_dist = dy
             
             if min_x_dist != float('inf'):
@@ -1047,16 +1071,16 @@ class ImageProcessor:
         if x_distances:
             spacing_x = np.median(x_distances)
         else:
-            spacing_x = 40.0
-            
+            spacing_x = pmr
+
         if y_distances:
             spacing_y = np.median(y_distances)
         else:
-            spacing_y = 40.0
-            
+            spacing_y = pmr
+
         return spacing_x, spacing_y
 
-    def _create_multi_view_summary(self, multi_view_dir: Path, view_configs: List[Dict]):
+    def _create_multi_view_summary(self, multi_view_dir: Path, view_configs: List[Dict], pmr: float = 40):
         """创建多视角综合展示图像"""
         try:
             print("\n生成多视角综合展示图像...")
@@ -1091,9 +1115,12 @@ class ImageProcessor:
             sample_img = view_images[0]
             view_height, view_width = sample_img.shape[:2]
 
+            # 使用配置化的间距参数
+            view_spacing = int(self.get_config_value('view_spacing_ratio', pmr))
+
             # 创建综合图像
-            summary_height = grid_rows * view_height + (grid_rows - 1) * 20  # 20像素间距
-            summary_width = grid_cols * view_width + (grid_cols - 1) * 20   # 20像素间距
+            summary_height = grid_rows * view_height + (grid_rows - 1) * view_spacing
+            summary_width = grid_cols * view_width + (grid_cols - 1) * view_spacing
 
             if len(sample_img.shape) == 3:
                 summary_image = np.zeros((summary_height, summary_width, sample_img.shape[2]), dtype=sample_img.dtype)
@@ -1105,8 +1132,8 @@ class ImageProcessor:
                 row = i // grid_cols
                 col = i % grid_cols
 
-                start_y = row * (view_height + 20)
-                start_x = col * (view_width + 20)
+                start_y = row * (view_height + view_spacing)
+                start_x = col * (view_width + view_spacing)
                 end_y = start_y + view_height
                 end_x = start_x + view_width
 
@@ -1117,9 +1144,12 @@ class ImageProcessor:
                     else:
                         summary_image[start_y:end_y, start_x:end_x] = img
 
-                    # 添加标题
-                    cv2.putText(summary_image, config['description'], (start_x + 5, start_y + 20),
+                    # 添加标题，使用配置化的偏移
+                    title_offset = max(5, int(pmr * 0.125))  # 相对于PMR的偏移
+                    cv2.putText(summary_image, config['description'], (start_x + title_offset, start_y + view_spacing),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+
+            print(f"  使用间距: {view_spacing} 像素 (PMR={pmr} * {self.config['view_spacing_ratio']})")
 
             # 保存综合展示图像
             summary_path = multi_view_dir / "multi_view_summary.png"
