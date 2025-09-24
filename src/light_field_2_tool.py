@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import Optional, Union, Dict, List, Tuple
 from scipy.ndimage import gaussian_filter, maximum_filter
+from .config import LightFieldConfig, get_config
 
 class ImageIO:
     """图像输入输出工具类"""
@@ -175,7 +176,7 @@ class DotArrayDetector:
 
     def detect_local_maxima(self, image: np.ndarray, min_distance: int = 8,
                             threshold_abs: Optional[float] = None,
-                            edge_mask_width: int = 100) -> list:
+                            edge_mask_width: Optional[int] = None) -> list:
         """
         检测局部最亮点
 
@@ -183,11 +184,15 @@ class DotArrayDetector:
             image: 输入图像（灰度图）
             min_distance: 局部最大值之间的最小距离
             threshold_abs: 绝对阈值，低于此值的点不被考虑
-            edge_mask_width: 边缘屏蔽宽度（像素），默认300像素
+            edge_mask_width: 边缘屏蔽宽度（像素），如果为None则使用默认值100
 
         Returns:
             局部最大值点的坐标列表 [(x, y), ...]
         """
+        # 如果没有提供 edge_mask_width，使用默认值
+        if edge_mask_width is None:
+            edge_mask_width = 100
+
         # 转换为灰度图
         if len(image.shape) == 3:
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -327,7 +332,8 @@ class DotArrayDetector:
 
     def detect_bright_spots(self, image: np.ndarray,
                          min_distance: Optional[int] = None,
-                         threshold_abs: Optional[float] = None) -> dict:
+                         threshold_abs: Optional[float] = None,
+                         edge_mask_width: Optional[int] = None) -> dict:
         """
         完整的亮点检测流程
 
@@ -335,6 +341,7 @@ class DotArrayDetector:
             image: 输入图像
             min_distance: 局部最大最小距离
             threshold_abs: 检测阈值
+            edge_mask_width: 边缘屏蔽宽度（像素）
 
         Returns:
             检测结果字典
@@ -345,7 +352,7 @@ class DotArrayDetector:
         print("开始亮点检测...")
 
         # 步骤1: 检测局部最亮点
-        peaks = self.detect_local_maxima(image, min_distance, threshold_abs, edge_mask_width=100)
+        peaks = self.detect_local_maxima(image, min_distance, threshold_abs, edge_mask_width=edge_mask_width)
 
         if len(peaks) < 1:
             print("警告：未检测到任何亮点")
@@ -430,30 +437,29 @@ class DotArrayVisualizer:
 class ImageProcessor:
     """图像处理器类，包含所有图像处理和分析功能"""
 
-    def __init__(self):
-        """初始化图像处理器"""
+    def __init__(self, config: Optional[LightFieldConfig] = None, exp_dir: Optional[Union[str, Path]] = None):
+        """
+        初始化图像处理器
+
+        Args:
+            config: 配置实例，如果为None则使用默认配置或从实验目录加载
+            exp_dir: 实验目录路径，如果指定则尝试从该目录加载config.yaml
+        """
         self.io_tool = ImageIO()
         self.detector = None
         self.visualizer = DotArrayVisualizer()
 
-        # 可配置的参数，基于PMR的比例因子
-        self.config = {
-            'view_spacing_ratio': 0.5,      # 多视角综合图像间距 = PMR * 这个比例
-            'min_distance_ratio': 0.375,    # 局部最大值最小距离 = PMR * 这个比例 (15/40=0.375)
-            'max_grid_size_ratio': 5,       # 最大网格尺寸 = PMR * 这个比例 (200/40=5)
-            'max_output_size_ratio': 100,   # 最大输出尺寸 = PMR * 这个比例 (4000/40=100)
-            'neighbor_threshold_ratio': 0.25, # 邻居判断阈值 = PMR * 这个比例 (10/40=0.25)
-            'min_distance_threshold_ratio': 0.125, # 最小距离阈值 = PMR * 这个比例 (5/40=0.125)
-        }
-
-        # 固定参数（与PMR无关）
-        self.fixed_config = {
-            'edge_mask_width': 100,          # 边缘屏蔽宽度（像素），固定值
-        }
-
-    def get_config_value(self, key: str, pmr: float) -> float:
-        """根据PMR值获取配置参数的实际值"""
-        return self.config[key] * pmr
+        # 配置加载优先级：
+        # 1. 直接传入的config参数
+        # 2. 从exp_dir加载配置文件
+        # 3. 使用默认配置
+        if config is not None:
+            self.config = config
+        elif exp_dir is not None:
+            from .config import get_config_from_experiment
+            self.config = get_config_from_experiment(exp_dir)
+        else:
+            self.config = get_config()
 
     @staticmethod
     def get_rainbow_color(value: float, min_val: float, max_val: float) -> Tuple[int, int, int]:
@@ -553,7 +559,8 @@ class ImageProcessor:
                 result = self.detector.detect_bright_spots(
                     image=image,
                     min_distance=15,  # 局部最大值最小距离
-                    threshold_abs=0   # 亮度阈值
+                    threshold_abs=0,   # 亮度阈值
+                    edge_mask_width=self.config.get_fixed_value('edge_mask_width')  # 从配置中获取边缘屏蔽宽度
                 )
 
                 # 保存检测到的中心点
@@ -632,7 +639,8 @@ class ImageProcessor:
                 result = self.detector.detect_bright_spots(
                     image=image,
                     min_distance=15,  # 局部最大值最小距离
-                    threshold_abs=12  # 亮度阈值
+                    threshold_abs=12,  # 亮度阈值
+                    edge_mask_width=self.config.get_fixed_value('edge_mask_width')  # 从配置中获取边缘屏蔽宽度
                 )
 
                 # 保存检测到的中心点和对应的颜色
@@ -817,13 +825,16 @@ class ImageProcessor:
             multi_view_dir = output_dir / exp_name / "multi_view"
             multi_view_dir.mkdir(parents=True, exist_ok=True)
 
-            # 定义视角参数
+            # 定义视角参数，使用配置化的缩放倍率和偏移倍率
+            extraction_scale = self.config.get_pmr_based_value('view_extraction_scale') / pmr  # 获取比例
+            offset_scale = self.config.get_pmr_based_value('view_offset_scale') / pmr          # 获取比例
+
             view_configs = [
-                {"name": "center", "description": "Center View", "scale": 0.2, "offset_x": 0, "offset_y": 0},
-                {"name": "top_left", "description": "Top Left View", "scale": 0.2, "offset_x": -0.25, "offset_y": -0.25},
-                {"name": "top_right", "description": "Top Right View", "scale": 0.2, "offset_x": 0.25, "offset_y": -0.25},
-                {"name": "bottom_left", "description": "Bottom Left View", "scale": 0.2, "offset_x": -0.25, "offset_y": 0.25},
-                {"name": "bottom_right", "description": "Bottom Right View", "scale": 0.2, "offset_x": 0.25, "offset_y": 0.25},
+                {"name": "center", "description": "Center View", "scale": extraction_scale, "offset_x": 0, "offset_y": 0},
+                {"name": "top_left", "description": "Top Left View", "scale": extraction_scale, "offset_x": -offset_scale, "offset_y": -offset_scale},
+                {"name": "top_right", "description": "Top Right View", "scale": extraction_scale, "offset_x": offset_scale, "offset_y": -offset_scale},
+                {"name": "bottom_left", "description": "Bottom Left View", "scale": extraction_scale, "offset_x": -offset_scale, "offset_y": offset_scale},
+                {"name": "bottom_right", "description": "Bottom Right View", "scale": extraction_scale, "offset_x": offset_scale, "offset_y": offset_scale},
             ]
 
             # 为每个视角生成图像
@@ -1149,7 +1160,7 @@ class ImageProcessor:
                     cv2.putText(summary_image, config['description'], (start_x + title_offset, start_y + view_spacing),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
 
-            print(f"  使用间距: {view_spacing} 像素 (PMR={pmr} * {self.config['view_spacing_ratio']})")
+            print(f"  使用间距: {view_spacing} 像素 (PMR={pmr} * {self.config._pmr_based_ratios['view_spacing_ratio']})")
 
             # 保存综合展示图像
             summary_path = multi_view_dir / "multi_view_summary.png"
@@ -1162,3 +1173,16 @@ class ImageProcessor:
 
         except Exception as e:
             print(f"  创建多视角综合展示图像失败: {e}")
+
+    def get_config_value(self, key: str, pmr: float) -> float:
+        """
+        获取配置参数的实际值（兼容旧的API）
+
+        Args:
+            key: 参数键名
+            pmr: PMR值
+
+        Returns:
+            配置参数值
+        """
+        return self.config.get_pmr_based_value(key)

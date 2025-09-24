@@ -94,9 +94,8 @@ def select_experiment_and_process(experiments):
 
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
-
-        # 创建图像处理器
-        processor = ImageProcessor()
+        
+        data_dir = Path("data")  # 数据根目录
 
         # 根据操作类型执行相应处理
         if operation_idx == 0:
@@ -104,6 +103,11 @@ def select_experiment_and_process(experiments):
             print("\n开始执行：全部操作")
             for exp_name, exp_data in selected_experiments.items():
                 print(f"\n处理实验：{exp_name}")
+                
+                # 为每个实验创建独立的处理器，自动加载对应配置
+                exp_dir = data_dir / exp_name
+                processor = ImageProcessor(exp_dir=exp_dir)
+                
                 processor.process_experiment_data(exp_name, exp_data, output_dir)
                 print(f"实验 {exp_name} 处理完成，可视化结果已保存到 output/{exp_name}/")
 
@@ -112,6 +116,11 @@ def select_experiment_and_process(experiments):
             print("\n开始执行：仅寻找最小光圈中心")
             for exp_name, exp_data in selected_experiments.items():
                 print(f"\n处理实验：{exp_name}")
+                
+                # 为每个实验创建独立的处理器，自动加载对应配置
+                exp_dir = data_dir / exp_name
+                processor = ImageProcessor(exp_dir=exp_dir)
+                
                 if "aperture_min" in exp_data:
                     processor.process_aperture_images(exp_data["aperture_min"], output_dir, exp_name)
                     print(f"实验 {exp_name} 光圈中心检测完成，可视化结果已保存到 output/{exp_name}/aperture_detection/")
@@ -126,6 +135,10 @@ def select_experiment_and_process(experiments):
             print("\n开始执行：光圈中心检测 + 光谱中心检测")
             for exp_name, exp_data in selected_experiments.items():
                 print(f"\n处理实验：{exp_name}")
+                
+                # 为每个实验创建独立的处理器，自动加载对应配置
+                exp_dir = data_dir / exp_name
+                processor = ImageProcessor(exp_dir=exp_dir)
 
                 aperture_centers = []
                 spectrum_data = {}
@@ -181,6 +194,10 @@ def select_experiment_and_process(experiments):
             for exp_name, exp_data in selected_experiments.items():
                 print(f"\n处理实验：{exp_name}")
 
+                # 为每个实验创建独立的处理器，自动加载对应配置
+                exp_dir = data_dir / exp_name
+                processor = ImageProcessor(exp_dir=exp_dir)
+
                 # 检测光圈中心点
                 aperture_centers = []
                 if "aperture_min" in exp_data:
@@ -218,9 +235,13 @@ def select_experiment_and_process(experiments):
                     print(f"    未找到lf_raw0.bmp，使用 {lf_raw_image.name}")
 
                 if lf_raw_image:
+                    # 从配置中获取PMR值
+                    pmr = processor.config.pmr
+                    print(f"  - 使用PMR值: {pmr}")
+
                     # 生成多视角图像
                     processor.generate_multi_view_images(
-                        lf_raw_image, aperture_centers, output_dir, exp_name
+                        lf_raw_image, aperture_centers, output_dir, exp_name, pmr=pmr
                     )
                     print(f"  - 多视角图像生成完成")
 
