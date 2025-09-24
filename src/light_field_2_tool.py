@@ -1028,7 +1028,7 @@ class ImageProcessor:
 
     def _calculate_actual_spacing(self, aperture_centers: List[Tuple[float, float]], pmr: float) -> Tuple[float, float]:
         """
-        计算实际的子图像间距
+        计算实际的子图像间距（优化版本：O(n log n) 复杂度）
         
         Args:
             aperture_centers: 子图像中心点列表
@@ -1041,53 +1041,69 @@ class ImageProcessor:
             # 如果中心点太少，返回PMR值作为默认值
             return pmr, pmr
 
+        from scipy.spatial import cKDTree
+
         centers_array = np.array(aperture_centers)
-        
-        # 计算X方向的间距
-        x_distances = []
-        y_distances = []
         
         # 使用配置化的参数
         neighbor_threshold = self.get_config_value('neighbor_threshold_ratio', pmr)
         min_distance_threshold = self.get_config_value('min_distance_threshold_ratio', pmr)
-
-        # 对每个中心点，找到最近的邻居
-        for i, (x1, y1) in enumerate(aperture_centers):
-            min_x_dist = float('inf')
-            min_y_dist = float('inf')
+        
+        print(f"  计算实际间距：处理 {len(aperture_centers)} 个中心点")
+        
+        # 构建 KDTree 用于快速最近邻搜索
+        kdtree = cKDTree(centers_array)
+        
+        # 每个点搜索最多8个最近邻（包括自己，所以实际是7个邻居）
+        k_neighbors = min(8, len(aperture_centers))
+        
+        # 查询每个点的最近邻居
+        distances, indices = kdtree.query(centers_array, k=k_neighbors)
+        
+        x_distances = []
+        y_distances = []
+        
+        # 对每个点处理其最近邻居
+        for i in range(len(aperture_centers)):
+            x1, y1 = aperture_centers[i]
             
-            for j, (x2, y2) in enumerate(aperture_centers):
-                if i == j:
+            # 遍历该点的最近邻居（跳过自己，即索引0）
+            for j in range(1, len(indices[i])):
+                if indices[i][j] >= len(aperture_centers):
                     continue
                     
+                neighbor_idx = indices[i][j]
+                x2, y2 = aperture_centers[neighbor_idx]
+                
                 dx = abs(x2 - x1)
                 dy = abs(y2 - y1)
                 
-                # X方向上的最近邻居（Y坐标相近）
-                if dy < neighbor_threshold:  # 认为在同一行
-                    if min_distance_threshold < dx < min_x_dist:  # 避免重复点
-                        min_x_dist = dx
+                # 跳过距离太小的点（可能是重复检测）
+                if dx < min_distance_threshold and dy < min_distance_threshold:
+                    continue
+                
+                # X方向上的邻居（Y坐标相近）
+                if dy < neighbor_threshold and dx >= min_distance_threshold:
+                    x_distances.append(dx)
                         
-                # Y方向上的最近邻居（X坐标相近）
-                if dx < neighbor_threshold:  # 认为在同一列
-                    if min_distance_threshold < dy < min_y_dist:  # 避免重复点
-                        min_y_dist = dy
-            
-            if min_x_dist != float('inf'):
-                x_distances.append(min_x_dist)
-            if min_y_dist != float('inf'):
-                y_distances.append(min_y_dist)
+                # Y方向上的邻居（X坐标相近）
+                if dx < neighbor_threshold and dy >= min_distance_threshold:
+                    y_distances.append(dy)
         
         # 使用中位数作为实际间距，更robust
         if x_distances:
             spacing_x = np.median(x_distances)
+            print(f"  X方向间距样本数: {len(x_distances)}, 中位数: {spacing_x:.2f}")
         else:
             spacing_x = pmr
+            print(f"  X方向未找到有效间距，使用PMR默认值: {spacing_x}")
 
         if y_distances:
             spacing_y = np.median(y_distances)
+            print(f"  Y方向间距样本数: {len(y_distances)}, 中位数: {spacing_y:.2f}")
         else:
             spacing_y = pmr
+            print(f"  Y方向未找到有效间距，使用PMR默认值: {spacing_y}")
 
         return spacing_x, spacing_y
 
