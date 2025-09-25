@@ -24,7 +24,7 @@ class LightFieldConfig:
         self._pmr_based_ratios = {
             'view_spacing_ratio': 0.5,                    # 多视角综合图像间距 = PMR * 这个比例
             'min_distance_ratio': 0.375,                  # 局部最大值最小距离 = PMR * 这个比例 (15/40=0.375)
-            'max_grid_size_ratio': 50,                     # 最大网格尺寸 = PMR * 这个比例 (200/40=5)
+            'max_grid_size_ratio': 50,                    # 最大网格尺寸 = PMR * 这个比例 (200/40=5)
             'max_output_size_ratio': 100,                 # 最大输出尺寸 = PMR * 这个比例 (4000/40=100)
             'neighbor_threshold_ratio': 0.25,             # 邻居判断阈值 = PMR * 这个比例 (10/40=0.25)
             'min_distance_threshold_ratio': 0.125,        # 最小距离阈值 = PMR * 这个比例 (5/40=0.125)
