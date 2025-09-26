@@ -33,7 +33,7 @@ class LightFieldConfig:
             'title_offset_ratio': 0.125,                  # 标题偏移 = PMR * 这个比例 (5/40=0.125)
         }
 
-        # 固定参数（与PMR无关）
+        # 固定参数
         self._fixed_params = {
             'edge_mask_width': 100,                       # 边缘屏蔽宽度（像素），固定值
             'subpixel_window_size': 5,                    # 亚像素精确定位窗口大小
@@ -57,11 +57,11 @@ class LightFieldConfig:
             'marker_size_small': 2,                       # 小标记尺寸
             'marker_size_medium': 3,                      # 中等标记尺寸
             'marker_size_large': 4,                       # 大标记尺寸
-            'font_scale_small': 0.4,                     # 小字体缩放
-            'font_scale_medium': 0.5,                    # 中等字体缩放
-            'font_scale_large': 0.6,                     # 大字体缩放
-            'line_thickness': 1,                         # 线条粗细
-            'text_thickness': 2,                         # 文字粗细
+            'font_scale_small': 0.4,                      # 小字体缩放
+            'font_scale_medium': 0.5,                     # 中等字体缩放
+            'font_scale_large': 0.6,                      # 大字体缩放
+            'line_thickness': 1,                          # 线条粗细
+            'text_thickness': 2,                          # 文字粗细
         }
 
     def set_pmr(self, pmr: float):
@@ -153,41 +153,22 @@ class LightFieldConfig:
             raise KeyError(f"未找到PMR相关参数: {key}")
         self._pmr_based_ratios[key] = ratio
 
-    def update_fixed_param(self, key: str, value: Any):
+    def get_pmr_ratio(self, key: str) -> float:
         """
-        更新固定参数
+        获取PMR相关的比例参数（不乘以PMR值）
 
         Args:
             key: 参数键名
-            value: 新的参数值
-        """
-        if key not in self._fixed_params:
-            raise KeyError(f"未找到固定参数: {key}")
-        self._fixed_params[key] = value
 
-    def update_detection_param(self, key: str, value: Any):
-        """
-        更新检测参数
+        Returns:
+            比例参数值
 
-        Args:
-            key: 参数键名
-            value: 新的参数值
+        Raises:
+            KeyError: 如果键不存在
         """
-        if key not in self._detection_params:
-            raise KeyError(f"未找到检测参数: {key}")
-        self._detection_params[key] = value
-
-    def update_visualization_param(self, key: str, value: Any):
-        """
-        更新可视化参数
-
-        Args:
-            key: 参数键名
-            value: 新的参数值
-        """
-        if key not in self._visualization_params:
-            raise KeyError(f"未找到可视化参数: {key}")
-        self._visualization_params[key] = value
+        if key not in self._pmr_based_ratios:
+            raise KeyError(f"未找到PMR相关参数: {key}")
+        return self._pmr_based_ratios[key]
 
     def get_all_current_values(self) -> Dict[str, Any]:
         """

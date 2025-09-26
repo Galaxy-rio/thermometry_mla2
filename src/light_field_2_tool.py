@@ -1,6 +1,6 @@
 """
 简单的光场图像处理工具
-提供基本的图片读取和保存功能
+包含图像IO、点阵检测、可视化和多视角图像生成等功能
 """
 
 import cv2
@@ -223,7 +223,9 @@ class DotArrayDetector:
 
         # 设置阈值
         if threshold_abs is None:
-            threshold_abs = np.mean(smoothed[mask]) + 2 * np.std(smoothed[mask])  # 只在有效区域计算阈值
+            mean_val = float(np.mean(smoothed[mask]))
+            std_val = float(np.std(smoothed[mask]))
+            threshold_abs = mean_val + 2 * std_val  # 只在有效区域计算阈值
 
         # 应用阈值
         local_maxima = local_maxima & (smoothed > threshold_abs)
@@ -1176,7 +1178,7 @@ class ImageProcessor:
                     cv2.putText(summary_image, config['description'], (start_x + title_offset, start_y + view_spacing),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
 
-            print(f"  使用间距: {view_spacing} 像素 (PMR={pmr} * {self.config._pmr_based_ratios['view_spacing_ratio']})")
+            print(f"  使用间距: {view_spacing} 像素 (PMR={pmr} * {self.config.get_pmr_ratio('view_spacing_ratio')})")
 
             # 保存综合展示图像
             summary_path = multi_view_dir / "multi_view_summary.png"
