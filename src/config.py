@@ -12,7 +12,7 @@ from pathlib import Path
 class LightFieldConfig:
     """光场处理配置类，集中管理所有可配置参数"""
 
-    def __init__(self, pmr: float = 40.0):
+    def __init__(self, pmr: float = 56.0):
         """
         初始化配置
 
@@ -46,9 +46,9 @@ class LightFieldConfig:
 
         # 检测相关参数
         self._detection_params = {
-            'expected_spacing': 16.0,                     # 期望的网格间距（像素）
-            'aperture_min_distance': 15,                  # 光圈检测最小距离
-            'aperture_threshold': 0,                      # 光圈检测阈值
+            'expected_spacing': 56.0,                     # 期望的网格间距（像素）
+            'aperture_min_distance': 50,                  # 光圈检测最小距离
+            'aperture_threshold': 70,                      # 光圈检测阈值
             'spectrum_min_distance': 15,                  # 光谱检测最小距离
             'spectrum_threshold': 12,                     # 光谱检测阈值
         }

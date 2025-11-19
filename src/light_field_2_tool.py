@@ -561,9 +561,9 @@ class ImageProcessor:
                 # 执行中心点检测
                 result = self.detector.detect_bright_spots(
                     image=image,
-                    min_distance=15,  # 局部最大值最小距离
-                    threshold_abs=0,   # 亮度阈值
-                    edge_mask_width=self.config.get_fixed_value('edge_mask_width')  # 从配置中获取边缘屏蔽宽度
+                    min_distance=self.config.get_detection_value('aperture_min_distance'),
+                    threshold_abs=self.config.get_detection_value('aperture_threshold'),
+                    edge_mask_width=self.config.get_fixed_value('edge_mask_width')
                 )
 
                 # 保存检测到的中心点
@@ -641,11 +641,10 @@ class ImageProcessor:
                 # 执行中心点检测
                 result = self.detector.detect_bright_spots(
                     image=image,
-                    min_distance=15,  # 局部最大值最小距离
-                    threshold_abs=12,  # 亮度阈值
-                    edge_mask_width=self.config.get_fixed_value('edge_mask_width')  # 从配置中获取边缘屏蔽宽度
+                    min_distance=self.config.get_detection_value('spectrum_min_distance'),
+                    threshold_abs=self.config.get_detection_value('spectrum_threshold'),
+                    edge_mask_width=self.config.get_fixed_value('edge_mask_width')
                 )
-
                 # 保存检测到的中心点和对应的颜色
                 centers = result.get('refined_centers', [])
                 color = self.get_rainbow_color(number, min_num, max_num)
