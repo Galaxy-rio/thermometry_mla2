@@ -947,11 +947,11 @@ class ImageProcessor:
                 print(f"  错误: 输出图像尺寸过大 ({output_width}x{output_height})，超过最大尺寸 {max_output_size}")
                 return None
 
-            # 创建输出图像，用白色背景
+            # 创建输出图像，用黑色背景
             if len(lf_raw_image.shape) == 3:
-                view_image = np.full((output_height, output_width, lf_raw_image.shape[2]), 255, dtype=lf_raw_image.dtype)
+                view_image = np.full((output_height, output_width, lf_raw_image.shape[2]), 0, dtype=lf_raw_image.dtype)
             else:
-                view_image = np.full((output_height, output_width), 255, dtype=lf_raw_image.dtype)
+                view_image = np.full((output_height, output_width), 0, dtype=lf_raw_image.dtype)
 
             valid_patches = 0
             overlap_count = 0
