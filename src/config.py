@@ -48,7 +48,7 @@ class LightFieldConfig:
         self._detection_params = {
             'expected_spacing': 56.0,                     # 期望的网格间距（像素）
             'aperture_min_distance': 50,                  # 光圈检测最小距离
-            'aperture_threshold': 40,                      # 光圈检测阈值
+            'aperture_threshold': 20,                      # 光圈检测阈值
             'spectrum_min_distance': 15,                  # 光谱检测最小距离
             'spectrum_threshold': 12,                     # 光谱检测阈值
         }
