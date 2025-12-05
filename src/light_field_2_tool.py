@@ -799,7 +799,7 @@ class ImageProcessor:
                                                 lf_raw_image, output_dir, exp_name)
 
     def generate_multi_view_images(self, lf_raw_image_path: Path, aperture_centers: List[Tuple[float, float]],
-                                 output_dir: Path, exp_name: str, pmr: int = 40):
+                                 output_dir: Path, exp_name: str, pmr: int = 40, subfolder: str = None):
         """
         生成第一类多视角图像
 
@@ -809,6 +809,7 @@ class ImageProcessor:
             output_dir: 输出目录
             exp_name: 实验名称
             pmr: 子图像直径（像素），默认40
+            subfolder: 子文件夹名称，用于批量处理时区分不同图像，默认None
         """
         print(f"\n=== 生成多视角图像 ===")
         print(f"子图像直径(PMR): {pmr} 像素")
@@ -823,8 +824,11 @@ class ImageProcessor:
             print(f"光场原图尺寸: {lf_raw_image.shape}")
             print(f"检测到的子图像中心数量: {len(aperture_centers)}")
 
-            # 创建输出目录
-            multi_view_dir = output_dir / exp_name / "multi_view"
+            # 创建输出目录（支持子文件夹）
+            if subfolder:
+                multi_view_dir = output_dir / exp_name / "multi_view" / subfolder
+            else:
+                multi_view_dir = output_dir / exp_name / "multi_view"
             multi_view_dir.mkdir(parents=True, exist_ok=True)
 
             # 定义视角参数，使用配置化的缩放倍率和偏移倍率

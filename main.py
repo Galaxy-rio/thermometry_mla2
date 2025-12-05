@@ -88,7 +88,8 @@ def select_experiment_and_process(experiments):
         print("1. 寻找最小光圈中心")
         print("2. 寻找最小光圈中心 + 各个波段图像的中心")
         print("3. 生成第一类多视角图像")
-        print("4. 未来功能（暂未实现）")
+        print("4. 按温度生成第一类多视角图像")
+        print("5. 未来功能（暂未实现）")
 
         operation_choice = input("\n请选择操作类型 (0-4): ").strip()
         operation_idx = int(operation_choice)
@@ -248,7 +249,67 @@ def select_experiment_and_process(experiments):
 
                 print(f"实验 {exp_name} 多视角图像处理完成，结果已保存到 output\\{exp_name}\\multi_view\\")
 
-        elif operation_idx >= 4:
+
+        elif operation_idx == 4:
+            # 批量生成多视角图像（处理所有lf_raw图像）
+            print("\n开始执行：批量生成多视角图像（处理所有lf_raw图像）")
+
+            for exp_name, exp_data in selected_experiments.items():
+                print(f"\n处理实验：{exp_name}")
+
+                # 为每个实验创建独立的处理器，自动加载对应配置
+                exp_dir = data_dir / exp_name
+                processor = ImageProcessor(exp_dir=exp_dir)
+
+                # 检测光圈中心点
+                aperture_centers = []
+                if "aperture_min" in exp_data:
+                    aperture_centers = processor.process_aperture_images(exp_data["aperture_min"], output_dir, exp_name)
+                    print(f"  - 光圈中心检测完成，共检测到 {len(aperture_centers)} 个中心点")
+                elif "aperture" in exp_data:
+                    aperture_centers = processor.process_aperture_images(exp_data["aperture"], output_dir, exp_name)
+                    print(f"  - 光圈中心检测完成，共检测到 {len(aperture_centers)} 个中心点")
+                else:
+                    print(f"  - 实验 {exp_name} 中未找到光圈图像，无法生成多视角图像")
+                    continue
+
+                if not aperture_centers:
+                    print(f"  - 未检测到光圈中心，跳过多视角图像生成")
+                    continue
+
+                # 检查是否有光场原图
+                if "lf_raw" not in exp_data:
+                    print(f"  - 实验 {exp_name} 中未找到光场原图，无法生成多视角图像")
+                    continue
+
+                # 获取所有lf_raw图像
+                lf_raw_files = exp_data["lf_raw"]
+                print(f"  - 找到 {len(lf_raw_files)} 个光场原图，准备批量处理")
+
+                # 从配置中获取PMR值
+                pmr = processor.config.pmr
+                print(f"  - 使用PMR值: {pmr}")
+
+                # 逐个处理每张光场原图
+                for idx, lf_raw_image in enumerate(lf_raw_files, 1):
+                    print(f"  - 处理第 {idx}/{len(lf_raw_files)} 张图像: {lf_raw_image.name}")
+
+                    # 获取图像文件名（不含扩展名）作为子文件夹名称
+                    image_name = lf_raw_image.stem
+
+                    # 生成多视角图像，指定子文件夹名称
+                    processor.generate_multi_view_images(
+                        lf_raw_image, aperture_centers, output_dir, exp_name,
+                        pmr=pmr, subfolder=image_name
+                    )
+                    print(f"    √ {image_name} 的多视角图像生成完成")
+
+                print(f"\n实验 {exp_name} 批量多视角图像处理完成")
+                print(f"结果已保存到 output\\{exp_name}\\multi_view\\<图像名称>\\")
+
+
+
+        elif operation_idx >= 5:
             # 未来功能
             print(f"\n操作类型 {operation_idx} 为未来功能，暂未实现")
             print("请选择其他操作类型")
