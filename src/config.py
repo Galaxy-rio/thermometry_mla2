@@ -30,7 +30,7 @@ class LightFieldConfig:
             'neighbor_threshold_ratio': 0.25,             # 邻居判断阈值 = PMR * 这个比例 (10/40=0.25)
             'min_distance_threshold_ratio': 0.125,        # 最小距离阈值 = PMR * 这个比例 (5/40=0.125)
             'view_extraction_scale': 0.2,                 # 每个子图像提取区域的缩放倍率 (8/40=0.2)
-            'view_offset_scale': 0.2,                    # 视角偏移的缩放倍率 (相对于子图像半径的比例)
+            'view_offset_scale': 0.3,                    # 视角偏移的缩放倍率 (相对于子图像半径的比例)
             'title_offset_ratio': 0.125,                  # 标题偏移 = PMR * 这个比例 (5/40=0.125)
         }
 

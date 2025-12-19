@@ -799,7 +799,7 @@ class ImageProcessor:
                                                 lf_raw_image, output_dir, exp_name)
 
     def generate_multi_view_images(self, lf_raw_image_path: Path, aperture_centers: List[Tuple[float, float]],
-                                 output_dir: Path, exp_name: str, pmr: int = 40, subfolder: str = None):
+output_dir: Path, exp_name: str, pmr: int = 40, subfolder: str = None):
         """
         生成第一类多视角图像
 
