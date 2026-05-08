@@ -951,11 +951,8 @@ output_dir: Path, exp_name: str, pmr: int = 40, subfolder: str = None):
                 print(f"  错误: 输出图像尺寸过大 ({output_width}x{output_height})，超过最大尺寸 {max_output_size}")
                 return None
 
-            # 创建输出图像，用黑色背景
-            if len(lf_raw_image.shape) == 3:
-                view_image = np.full((output_height, output_width, lf_raw_image.shape[2]), 0, dtype=lf_raw_image.dtype)
-            else:
-                view_image = np.full((output_height, output_width), 0, dtype=lf_raw_image.dtype)
+            # 创建输出图像，使用透明背景（BGRA）
+            view_image = np.zeros((output_height, output_width, 4), dtype=lf_raw_image.dtype)
 
             valid_patches = 0
             overlap_count = 0
@@ -976,11 +973,13 @@ output_dir: Path, exp_name: str, pmr: int = 40, subfolder: str = None):
                 if left < 0 or right >= w or top < 0 or bottom >= h:
                     continue
 
-                # 提取patch
+                # 提取patch并转换为BGRA
                 if len(lf_raw_image.shape) == 3:
                     patch = lf_raw_image[top:bottom, left:right, :]
+                    patch = cv2.cvtColor(patch, cv2.COLOR_BGR2BGRA)
                 else:
                     patch = lf_raw_image[top:bottom, left:right]
+                    patch = cv2.cvtColor(patch, cv2.COLOR_GRAY2BGRA)
 
                 # 确保patch尺寸正确
                 if patch.shape[0] != patch_size or patch.shape[1] != patch_size:
@@ -988,6 +987,8 @@ output_dir: Path, exp_name: str, pmr: int = 40, subfolder: str = None):
 
                 # 旋转180度
                 patch = cv2.rotate(patch, cv2.ROTATE_180)
+                # 设为不透明
+                patch[:, :, 3] = 255
 
                 # 使用浮点坐标计算精确的输出位置
                 grid_x_float, grid_y_float = grid_coords[i]
@@ -1004,17 +1005,11 @@ output_dir: Path, exp_name: str, pmr: int = 40, subfolder: str = None):
 
                 # 确保不超出输出图像边界
                 if output_right <= output_width and output_bottom <= output_height and output_left >= 0 and output_top >= 0:
-                    # 检查是否会覆盖非白色区域（检测重叠）
-                    if len(lf_raw_image.shape) == 3:
-                        existing_region = view_image[output_top:output_bottom, output_left:output_right, :]
-                        if not np.all(existing_region == 255):
-                            overlap_count += 1
-                        view_image[output_top:output_bottom, output_left:output_right, :] = patch
-                    else:
-                        existing_region = view_image[output_top:output_bottom, output_left:output_right]
-                        if not np.all(existing_region == 255):
-                            overlap_count += 1
-                        view_image[output_top:output_bottom, output_left:output_right] = patch
+                    # 检查是否会覆盖已存在的透明度（检测重叠）
+                    existing_region = view_image[output_top:output_bottom, output_left:output_right, :]
+                    if np.any(existing_region[:, :, 3] > 0):
+                        overlap_count += 1
+                    view_image[output_top:output_bottom, output_left:output_right, :] = patch
 
                     valid_patches += 1
 
